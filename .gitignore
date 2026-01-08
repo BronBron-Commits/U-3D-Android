@@ -1,0 +1,15 @@
+# Termux build artifacts
+game
+*.o
+*.gch
+*.exe
+*.apk
+*.log
+*.tmp
+.DS_Store
+
+# X11 builds
+*.so
+
+# IDE
+.vscode/
