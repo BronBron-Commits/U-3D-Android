@@ -9,21 +9,15 @@
 
 const char *vs_src =
 "attribute vec3 aPos;\n"
-"uniform float uRot;\n"
+"uniform mat4 uMVP;\n"
 "void main() {\n"
-"  float c = cos(uRot);\n"
-"  float s = sin(uRot);\n"
-"  mat3 r = mat3(\n"
-"    c, -s, 0.0,\n"
-"    s,  c, 0.0,\n"
-"    0.0,0.0,1.0);\n"
-"  gl_Position = vec4(r * aPos, 1.0);\n"
+"  gl_Position = uMVP * vec4(aPos, 1.0);\n"
 "}\n";
 
 const char *fs_src =
 "precision mediump float;\n"
 "void main() {\n"
-"  gl_FragColor = vec4(1.0, 0.3, 0.2, 1.0);\n"
+"  gl_FragColor = vec4(0.2, 0.8, 1.0, 1.0);\n"
 "}\n";
 
 GLuint compile(GLenum type, const char *src) {
@@ -33,15 +27,60 @@ GLuint compile(GLenum type, const char *src) {
     return s;
 }
 
+/* column-major math */
+
+void mat4_identity(float *m) {
+    for (int i = 0; i < 16; i++) m[i] = 0.0f;
+    m[0]=m[5]=m[10]=m[15]=1.0f;
+}
+
+void mat4_translate(float *m, float z) {
+    mat4_identity(m);
+    m[14] = z;
+}
+
+void mat4_rotate_y(float *m, float a) {
+    mat4_identity(m);
+    m[0]  =  cosf(a);
+    m[2]  = -sinf(a);
+    m[8]  =  sinf(a);
+    m[10] =  cosf(a);
+}
+
+void mat4_rotate_x(float *m, float a) {
+    mat4_identity(m);
+    m[5]  =  cosf(a);
+    m[6]  =  sinf(a);
+    m[9]  = -sinf(a);
+    m[10] =  cosf(a);
+}
+
+void mat4_perspective(float *m, float fov, float asp, float n, float f) {
+    float t = tanf(fov * 0.5f);
+    for (int i = 0; i < 16; i++) m[i] = 0.0f;
+    m[0]  = 1.0f / (asp * t);
+    m[5]  = 1.0f / t;
+    m[10] = -(f + n) / (f - n);
+    m[11] = -1.0f;
+    m[14] = -(2.0f * f * n) / (f - n);
+}
+
+void mat4_mul(float *o, float *a, float *b) {
+    for (int c = 0; c < 4; c++)
+        for (int r = 0; r < 4; r++)
+            o[c*4+r] =
+                a[0*4+r] * b[c*4+0] +
+                a[1*4+r] * b[c*4+1] +
+                a[2*4+r] * b[c*4+2] +
+                a[3*4+r] * b[c*4+3];
+}
+
 int main() {
     Display *xd = XOpenDisplay(NULL);
-    int scr = DefaultScreen(xd);
-
     Window win = XCreateSimpleWindow(
-        xd, RootWindow(xd, scr),
+        xd, DefaultRootWindow(xd),
         0, 0, WIDTH, HEIGHT, 0,
-        BlackPixel(xd, scr),
-        WhitePixel(xd, scr)
+        0, 0
     );
     XMapWindow(xd, win);
 
@@ -51,6 +90,7 @@ int main() {
     EGLint cfg_attr[] = {
         EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
         EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+        EGL_DEPTH_SIZE, 16,
         EGL_NONE
     };
 
@@ -64,43 +104,65 @@ int main() {
     eglMakeCurrent(ed, surf, surf, ctx);
 
     glViewport(0, 0, WIDTH, HEIGHT);
+    glEnable(GL_DEPTH_TEST);
 
-    GLuint vs = compile(GL_VERTEX_SHADER, vs_src);
-    GLuint fs = compile(GL_FRAGMENT_SHADER, fs_src);
     GLuint prog = glCreateProgram();
-    glAttachShader(prog, vs);
-    glAttachShader(prog, fs);
+    glAttachShader(prog, compile(GL_VERTEX_SHADER, vs_src));
+    glAttachShader(prog, compile(GL_FRAGMENT_SHADER, fs_src));
     glLinkProgram(prog);
     glUseProgram(prog);
 
-    /* ACTUAL GEOMETRY */
     float verts[] = {
-         0.0f,  0.6f, 0.0f,
-        -0.6f, -0.6f, 0.0f,
-         0.6f, -0.6f, 0.0f
+        -0.5f,-0.5f,-0.5f,  0.5f,-0.5f,-0.5f,
+         0.5f, 0.5f,-0.5f, -0.5f, 0.5f,-0.5f,
+        -0.5f,-0.5f, 0.5f,  0.5f,-0.5f, 0.5f,
+         0.5f, 0.5f, 0.5f, -0.5f, 0.5f, 0.5f
     };
 
-    GLuint vbo;
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
+    unsigned short idx[] = {
+        0,1,2, 2,3,0,
+        4,5,6, 6,7,4,
+        0,4,7, 7,3,0,
+        1,5,6, 6,2,1,
+        3,2,6, 6,7,3,
+        0,1,5, 5,4,0
+    };
 
-    GLint aPos = glGetAttribLocation(prog, "aPos");
+    GLuint vbo, ibo;
+    glGenBuffers(1,&vbo);
+    glBindBuffer(GL_ARRAY_BUFFER,vbo);
+    glBufferData(GL_ARRAY_BUFFER,sizeof(verts),verts,GL_STATIC_DRAW);
+
+    glGenBuffers(1,&ibo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,ibo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER,sizeof(idx),idx,GL_STATIC_DRAW);
+
+    GLint aPos = glGetAttribLocation(prog,"aPos");
     glEnableVertexAttribArray(aPos);
-    glVertexAttribPointer(aPos, 3, GL_FLOAT, GL_FALSE, 0, 0);
+    glVertexAttribPointer(aPos,3,GL_FLOAT,GL_FALSE,0,0);
 
-    GLint uRot = glGetUniformLocation(prog, "uRot");
+    GLint uMVP = glGetUniformLocation(prog,"uMVP");
+
+    float proj[16], view[16], rx[16], ry[16], tmp[16], mvp[16];
+    mat4_perspective(proj, 1.0f, (float)WIDTH/HEIGHT, 0.1f, 50.0f);
+    mat4_translate(view, -4.0f);
 
     float t = 0.0f;
 
     while (1) {
-        t += 0.02f;
+        t += 0.015f;
 
-        glClearColor(0.05f, 0.05f, 0.1f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        mat4_rotate_y(ry, t);
+        mat4_rotate_x(rx, t * 0.7f);
+        mat4_mul(tmp, ry, rx);
+        mat4_mul(tmp, view, tmp);
+        mat4_mul(mvp, proj, tmp);
 
-        glUniform1f(uRot, t);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glClearColor(0.05f,0.05f,0.08f,1.0f);
+        glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+
+        glUniformMatrix4fv(uMVP,1,GL_FALSE,mvp);
+        glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_SHORT, 0);
 
         eglSwapBuffers(ed, surf);
         usleep(16000);
