@@ -8,6 +8,10 @@
 #define WIDTH  480
 #define HEIGHT 800
 
+#define ROT_SENS   0.0025f
+#define DAMPING    0.985f
+#define MAX_VEL    0.15f
+
 const char *vs_src =
 "attribute vec3 aPos;\n"
 "uniform mat4 uMVP;\n"
@@ -74,6 +78,12 @@ void mat4_mul(float *o, float *a, float *b) {
                 a[1*4+r] * b[c*4+1] +
                 a[2*4+r] * b[c*4+2] +
                 a[3*4+r] * b[c*4+3];
+}
+
+float clamp(float v, float min, float max) {
+    if (v < min) return min;
+    if (v > max) return max;
+    return v;
 }
 
 int main() {
@@ -160,7 +170,9 @@ int main() {
 
     bool dragging = false;
     int last_x = 0, last_y = 0;
+
     float rot_x = 0.0f, rot_y = 0.0f;
+    float vel_x = 0.0f, vel_y = 0.0f;
 
     while (1) {
         while (XPending(xd)) {
@@ -183,10 +195,19 @@ int main() {
                 last_x = e.xmotion.x;
                 last_y = e.xmotion.y;
 
-                rot_y += dx * 0.01f;
-                rot_x += dy * 0.01f;
+                vel_y += dx * ROT_SENS;
+                vel_x += dy * ROT_SENS;
+
+                vel_x = clamp(vel_x, -MAX_VEL, MAX_VEL);
+                vel_y = clamp(vel_y, -MAX_VEL, MAX_VEL);
             }
         }
+
+        rot_x += vel_x;
+        rot_y += vel_y;
+
+        vel_x *= DAMPING;
+        vel_y *= DAMPING;
 
         mat4_rotate_y(ry, rot_y);
         mat4_rotate_x(rx, rot_x);
