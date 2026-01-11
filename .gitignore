@@ -1,15 +1,4 @@
-# Termux build artifacts
-game
+u3d-x11
 *.o
-*.gch
-*.exe
-*.apk
-*.log
-*.tmp
-.DS_Store
-
-# X11 builds
 *.so
-
-# IDE
-.vscode/
+*.a
