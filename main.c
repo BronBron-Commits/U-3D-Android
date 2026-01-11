@@ -14,10 +14,11 @@
 #define ROT_SENS    0.005f
 #define ROT_DAMP    0.96f
 
-#define LEFT_BOUND  -1.8f
-#define RIGHT_BOUND  1.8f
-#define BOTTOM_BOUND -1.2f
-#define TOP_BOUND     1.2f
+/* bounds stay modest; mapping does the real work */
+#define LEFT_BOUND  -4.0f
+#define RIGHT_BOUND  4.0f
+#define BOTTOM_BOUND -3.0f
+#define TOP_BOUND     3.0f
 
 /* ================= SHADERS ================= */
 
@@ -219,8 +220,10 @@ int main(){
     while(1){
         while(XPending(xd)){
             XEvent e; XNextEvent(xd,&e);
-            float wx=(float)e.xmotion.x/WIDTH*4.0f-2.0f;
-            float wy=(float)(HEIGHT-e.xmotion.y)/HEIGHT*3.0f-1.5f;
+
+            /* expanded, better-feeling screen → world mapping */
+            float wx = (float)e.xmotion.x / WIDTH  * 8.0f - 4.0f;
+            float wy = (float)(HEIGHT - e.xmotion.y) / HEIGHT * 6.0f - 3.0f;
 
             if(e.type==ButtonPress){
                 last_x=e.xbutton.x;
