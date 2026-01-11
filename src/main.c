@@ -161,7 +161,6 @@ int main(){
     GLint uWorld=glGetUniformLocation(prog,"uWorld");
     GLint uSelected=glGetUniformLocation(prog,"uSelected");
 
-    /* ----- cube geometry ----- */
     float cube[]={
         -0.5,-0.5,0.5,1,0,0,0,0,1,   0.5,-0.5,0.5,1,0,0,0,0,1,   0.5,0.5,0.5,1,0,0,0,0,1,
         -0.5,-0.5,0.5,1,0,0,0,0,1,   0.5,0.5,0.5,1,0,0,0,0,1,  -0.5,0.5,0.5,1,0,0,0,0,1,
@@ -189,7 +188,6 @@ int main(){
     glEnableVertexAttribArray(1);
     glEnableVertexAttribArray(2);
 
-    /* ----- grid geometry ----- */
     float grid[]={
         -5,0,0, 0.8,0.2,0.2,  5,0,0, 0.8,0.2,0.2,
          0,-5,0, 0.2,0.8,0.2, 0,5,0, 0.2,0.8,0.2,
@@ -214,7 +212,8 @@ int main(){
     agents[0].x=-1.3f; agents[0].y=0;
     agents[1].x= 1.3f; agents[1].y=0;
 
-    int grabbed=-1, selected=-1, last_x=0, last_y=0;
+    int grabbed=-1, selected=-1, last_x=0;
+    float cursor_x=0,cursor_y=0;
 
     while(1){
         while(XPending(xd)){
@@ -222,9 +221,13 @@ int main(){
             float wx=(float)e.xmotion.x/WIDTH*4.0f-2.0f;
             float wy=(float)(HEIGHT-e.xmotion.y)/HEIGHT*3.0f-1.5f;
 
+            if(e.type==MotionNotify){
+                cursor_x=wx;
+                cursor_y=wy;
+            }
+
             if(e.type==ButtonPress){
                 last_x=e.xbutton.x;
-                last_y=e.xbutton.y;
                 selected=-1;
                 grabbed=-1;
                 for(int i=0;i<NUM_AGENTS;i++){
@@ -260,7 +263,6 @@ int main(){
         glClearColor(0.05f,0.05f,0.08f,1);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 
-        /* draw grid */
         glBindBuffer(GL_ARRAY_BUFFER,grid_vbo);
         glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,6*sizeof(float),(void*)0);
         glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,6*sizeof(float),(void*)(3*sizeof(float)));
@@ -275,7 +277,6 @@ int main(){
         glUniformMatrix4fv(uMVP,1,GL_FALSE,gmvp);
         glDrawArrays(GL_LINES,0,6);
 
-        /* restore cube state */
         glBindBuffer(GL_ARRAY_BUFFER,vbo);
         glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,9*sizeof(float),(void*)0);
         glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,9*sizeof(float),(void*)(3*sizeof(float)));
@@ -292,6 +293,13 @@ int main(){
             glUniform1f(uSelected,(i==selected)?1.0f:0.0f);
             draw_cube(uMVP,uWorld,proj,view,model);
         }
+
+        float cr[16],cs[16],cm[16];
+        mat4_translate(cr,cursor_x,cursor_y,0);
+        mat4_scale(cs,0.15f,0.15f,0.15f);
+        mat4_mul(cm,cr,cs);
+        glUniform1f(uSelected,1.0f);
+        draw_cube(uMVP,uWorld,proj,view,cm);
 
         eglSwapBuffers(ed,surf);
         usleep(16000);
